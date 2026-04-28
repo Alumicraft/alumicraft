@@ -107,6 +107,20 @@
 					}
 				}
 				frappe.route_options = opts;
+
+				// Frappe's get_path (utils.js:generate_route) builds the anchor
+				// href with `encodeURIComponent(value)` on array route_options,
+				// which silently coerces arrays to comma-joined strings — e.g.
+				// ?project_type=in,Service/Parts,Consignment. Frappe's anchor
+				// click handler (router.js) then parses those URL params back
+				// as plain strings and OVERWRITES our route_options with the
+				// broken comma-joined value. Strip the query string off the
+				// anchor before the bubble handler runs so it skips that
+				// overwrite branch and uses our clean route_options instead.
+				var anchor = e.target.closest("a.item-anchor");
+				if (anchor && anchor.search) {
+					anchor.search = "";
+				}
 			}
 		}
 
