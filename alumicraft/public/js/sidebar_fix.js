@@ -97,6 +97,10 @@
 			}
 		}
 
+		// Remember which workspace this doctype was clicked from, so a hard
+		// refresh of /app/<doctype> returns to the same workspace.
+		if (item.link_to) remember_doctype_workspace(item.link_to);
+
 		// Track click — poll every 200ms for 5s to enforce active state
 		// (Frappe rebuilds sidebar DOM during nav; MutationObserver alone fails)
 		_last_clicked = { label: label, link_to: item.link_to };
@@ -273,6 +277,33 @@
 		return out;
 	}
 
+	// Per-doctype workspace memory: when the user clicks a sidebar item
+	// linking to doctype D from workspace W, remember {D: W}. On hard
+	// refresh of /app/<D>, prefer that workspace over the global last-used.
+	var DOCTYPE_MAP_KEY = "sidebar_fix_doctype_workspace";
+	var GLOBAL_KEY = "sidebar_fix_last_workspace";
+
+	function read_doctype_map() {
+		try {
+			var raw = localStorage.getItem(DOCTYPE_MAP_KEY);
+			if (!raw) return {};
+			var parsed = JSON.parse(raw);
+			return parsed && typeof parsed === "object" ? parsed : {};
+		} catch (e) { return {}; }
+	}
+
+	function remember_doctype_workspace(doctype) {
+		if (!doctype) return;
+		try {
+			var ws = frappe.app && frappe.app.sidebar && frappe.app.sidebar.sidebar_title;
+			if (!ws) return;
+			var map = read_doctype_map();
+			if (map[doctype] === ws) return;
+			map[doctype] = ws;
+			localStorage.setItem(DOCTYPE_MAP_KEY, JSON.stringify(map));
+		} catch (e) {}
+	}
+
 	function pick_correct_workspace() {
 		try {
 			var route = frappe.get_route() || [];
@@ -284,8 +315,14 @@
 			if (!candidates.length) return null;
 			if (candidates.length === 1) return candidates[0];
 
+			// Per-doctype hint wins over the global last-used.
+			var map = read_doctype_map();
+			if (map[entity] && candidates.indexOf(map[entity]) !== -1) {
+				return map[entity];
+			}
+
 			var last = null;
-			try { last = localStorage.getItem("sidebar_fix_last_workspace"); } catch (e) {}
+			try { last = localStorage.getItem(GLOBAL_KEY); } catch (e) {}
 			if (last && candidates.indexOf(last) !== -1) return last;
 			return candidates[0];
 		} catch (e) {
@@ -296,7 +333,7 @@
 	function save_last_workspace() {
 		try {
 			if (frappe.app && frappe.app.sidebar && frappe.app.sidebar.sidebar_title) {
-				localStorage.setItem("sidebar_fix_last_workspace", frappe.app.sidebar.sidebar_title);
+				localStorage.setItem(GLOBAL_KEY, frappe.app.sidebar.sidebar_title);
 			}
 		} catch (e) {}
 	}
