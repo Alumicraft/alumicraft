@@ -91,19 +91,25 @@
 		// JSON.parses values that look like arrays — strings come through with
 		// literal quotes ('"Build"') and never match. Array form round-trips
 		// cleanly: ["=","Build"] → ?key=["=","Build"] → JSON.parse → filter.
+		//
+		// Use "<DocType>.<field>" as the key so list_view's parser short-
+		// circuits its frappe.meta.get_doctype_for_field lookup. Without the
+		// prefix, the parser silently drops filters when the doctype's meta
+		// hasn't fully loaded yet.
 		if (item.filters) {
 			var filters = parse_filters(item.filters);
 			if (filters.length) {
 				var opts = {};
 				for (var i = 0; i < filters.length; i++) {
 					var f = filters[i];
+					var key = (f[0] ? f[0] + "." : "") + f[1];
 					var entry = [f[2], f[3]];
-					if (opts[f[1]] === undefined) {
-						opts[f[1]] = entry;
-					} else if (Array.isArray(opts[f[1]]) && Array.isArray(opts[f[1]][0])) {
-						opts[f[1]].push(entry);
+					if (opts[key] === undefined) {
+						opts[key] = entry;
+					} else if (Array.isArray(opts[key]) && Array.isArray(opts[key][0])) {
+						opts[key].push(entry);
 					} else {
-						opts[f[1]] = [opts[f[1]], entry];
+						opts[key] = [opts[key], entry];
 					}
 				}
 				frappe.route_options = opts;
