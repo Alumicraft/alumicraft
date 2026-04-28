@@ -1,16 +1,24 @@
 [project]
 name = "alumicraft"
-authors = [
-    { name = "Alumicraft", email = "dev@alumicraft.local" },
-]
+version = "0.0.1"
 description = "Alumicraft custom Frappe app"
+authors = [
+    {name = "Alumicraft", email = "dev@alumicraft.local"}
+]
 requires-python = ">=3.10"
-readme = "README.md"
-dynamic = ["version"]
+license = {text = "MIT"}
+
 dependencies = []
 
 [build-system]
-requires = ["flit_core >=3.4,<4"]
-build-backend = "flit_core.buildapi"
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
 
-[tool.bench.dev-dependencies]
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.setuptools.package-data]
+"*" = ["*.json", "*.txt", "*.html", "*.css", "*.js"]
+
+[tool.bench.frappe-dependencies]
+frappe = ">=15.0.0,<17.0.0"
