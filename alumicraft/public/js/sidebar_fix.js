@@ -371,6 +371,36 @@
 		} catch (e) {}
 	}
 
+	// Frappe v16's sidebar_item.js TypeLink.get_path crashes with
+	// "Cannot read properties of undefined (reading 'public')" when an
+	// item has link_type="Workspace" but the target workspace isn't in
+	// frappe.workspaces (deleted, renamed, or not visible to the current
+	// user). The crash aborts sidebar setup mid-render — items after the
+	// broken one don't show, and our workspace-switch fix can't complete.
+	// Wrap get_path so a missing workspace yields a null path (which
+	// Frappe's make() then skips gracefully) instead of throwing.
+	function patch_typelink_get_path() {
+		try {
+			if (!frappe.ui || !frappe.ui.sidebar_item || !frappe.ui.sidebar_item.TypeLink) return false;
+			var proto = frappe.ui.sidebar_item.TypeLink.prototype;
+			if (proto._sidebar_fix_get_path_patched) return true;
+			var orig = proto.get_path;
+			if (typeof orig !== "function") return false;
+			proto.get_path = function () {
+				try {
+					return orig.call(this);
+				} catch (e) {
+					console.warn("Sidebar fix: get_path failed for item", this.item, e);
+					return null;
+				}
+			};
+			proto._sidebar_fix_get_path_patched = true;
+			return true;
+		} catch (e) {
+			return false;
+		}
+	}
+
 	function fix_initial_workspace() {
 		if (!frappe.app || !frappe.app.sidebar) return;
 		var sb = frappe.app.sidebar;
@@ -399,6 +429,7 @@
 		if (_initialized) return true;
 		_initialized = true;
 
+		patch_typelink_get_path();
 		try_patch_workspace_switch(20);
 		fix_initial_workspace_retry(20);
 		$(window).on("beforeunload", save_last_workspace);
