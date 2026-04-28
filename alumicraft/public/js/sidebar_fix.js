@@ -84,14 +84,27 @@
 		}
 		if (!item || item.type !== "Link") return;
 
-		// Apply filters as route_options before Frappe navigates
+		// Apply filters as route_options before Frappe navigates.
+		// Always use the [op, value] array form: Frappe's set_route does
+		// JSON.stringify on values for the URL, but set_route_options_from_url
+		// reads them back without JSON.parse. List view's filter parser only
+		// JSON.parses values that look like arrays — strings come through with
+		// literal quotes ('"Build"') and never match. Array form round-trips
+		// cleanly: ["=","Build"] → ?key=["=","Build"] → JSON.parse → filter.
 		if (item.filters) {
 			var filters = parse_filters(item.filters);
 			if (filters.length) {
 				var opts = {};
 				for (var i = 0; i < filters.length; i++) {
 					var f = filters[i];
-					opts[f[1]] = f[2] === "=" ? f[3] : [f[2], f[3]];
+					var entry = [f[2], f[3]];
+					if (opts[f[1]] === undefined) {
+						opts[f[1]] = entry;
+					} else if (Array.isArray(opts[f[1]]) && Array.isArray(opts[f[1]][0])) {
+						opts[f[1]].push(entry);
+					} else {
+						opts[f[1]] = [opts[f[1]], entry];
+					}
 				}
 				frappe.route_options = opts;
 			}
