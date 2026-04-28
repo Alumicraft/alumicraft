@@ -1,0 +1,1 @@
+"""Alumicraft module."""
