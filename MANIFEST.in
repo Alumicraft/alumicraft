@@ -1,0 +1,18 @@
+include MANIFEST.in
+include requirements.txt
+include *.json
+include *.md
+include *.py
+include *.txt
+recursive-include alumicraft *.css
+recursive-include alumicraft *.csv
+recursive-include alumicraft *.html
+recursive-include alumicraft *.ico
+recursive-include alumicraft *.js
+recursive-include alumicraft *.json
+recursive-include alumicraft *.md
+recursive-include alumicraft *.png
+recursive-include alumicraft *.py
+recursive-include alumicraft *.svg
+recursive-include alumicraft *.txt
+recursive-exclude alumicraft *.pyc
