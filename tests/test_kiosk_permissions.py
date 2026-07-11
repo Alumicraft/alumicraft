@@ -195,11 +195,18 @@ class KioskPermissionTests(unittest.TestCase):
         sys.modules.pop("alumicraft.permissions", None)
         cls.boot = importlib.import_module("alumicraft.api.boot")
         cls.permissions = importlib.import_module("alumicraft.permissions")
+        cls.cleanup_patch = importlib.import_module(
+            "alumicraft.patches.cleanup_kiosk_verification_timesheets"
+        )
 
     @classmethod
     def tearDownClass(cls):
         sys.modules.pop("alumicraft.api.boot", None)
         sys.modules.pop("alumicraft.permissions", None)
+        sys.modules.pop(
+            "alumicraft.patches.cleanup_kiosk_verification_timesheets",
+            None,
+        )
         if cls.original_frappe is None:
             sys.modules.pop("frappe", None)
         else:
@@ -695,6 +702,47 @@ class KioskPermissionTests(unittest.TestCase):
             path="/api/resource/Employee", method="GET"
         )
         self.permissions.before_request()
+
+    def test_cleanup_patch_matches_only_the_exact_verification_rows(self):
+        row = types.SimpleNamespace(
+            description="CODEX KIOSK NAMING TEST",
+            project="LOKS21124",
+            task="TASK-2025-00091",
+            hours=1,
+        )
+        doc = types.SimpleNamespace(
+            docstatus=0,
+            owner="kiosk@drivealumicraft.com",
+            employee="HR-EMP-00015",
+            time_logs=[row],
+        )
+        expected = self.cleanup_patch.VERIFICATION_TIMESHEETS[
+            "TS-2026-00897"
+        ]
+
+        self.assertTrue(
+            self.cleanup_patch._matches_verification_timesheet(doc, expected)
+        )
+
+        for fieldname, value in (
+            ("owner", "other@example.com"),
+            ("employee", "HR-EMP-00016"),
+            ("docstatus", 1),
+        ):
+            with self.subTest(fieldname=fieldname):
+                original = getattr(doc, fieldname)
+                setattr(doc, fieldname, value)
+                self.assertFalse(
+                    self.cleanup_patch._matches_verification_timesheet(
+                        doc, expected
+                    )
+                )
+                setattr(doc, fieldname, original)
+
+        row.description = "Real Timesheet"
+        self.assertFalse(
+            self.cleanup_patch._matches_verification_timesheet(doc, expected)
+        )
 
 
 if __name__ == "__main__":
