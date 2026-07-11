@@ -19,6 +19,7 @@ function makeHarness({ enabled = true, isNew = true } = {}) {
 	const identityRequests = [];
 	const linkTitles = {};
 	const displayedEmployees = [];
+	let employeeInput = "";
 	const window = {};
 	const frappe = {
 		boot: {
@@ -65,6 +66,18 @@ function makeHarness({ enabled = true, isNew = true } = {}) {
 
 	const employeeField = {
 		df: {},
+		label: null,
+		last_value: null,
+		title_value_map: {},
+		$input: {
+			val(value) {
+				if (arguments.length) {
+					employeeInput = value;
+					return this;
+				}
+				return employeeInput;
+			},
+		},
 		$link_open: {
 			remove() {
 				removed.employeeOpen += 1;
@@ -81,7 +94,15 @@ function makeHarness({ enabled = true, isNew = true } = {}) {
 			},
 		},
 		translate_and_set_input_value(label, value) {
+			this.title_value_map[label] = value;
+			this.$input.val(label);
 			displayedEmployees.push([label, value]);
+		},
+		get_label_value() {
+			return this.$input.val();
+		},
+		set_input_value(value) {
+			this.$input.val(value);
 		},
 	};
 	const frm = {
@@ -203,6 +224,12 @@ test("employee selection fills only Timesheet identity fields and shows the empl
 	assert.equal(harness.frm.doc.department, "Fabrication");
 	assert.equal(harness.frm.doc.company, "Alumicraft");
 	assert.equal(harness.frm.doc.user, null);
+	assert.equal(harness.frm.__alumicraft_selected_employee, "EMP-0042");
+	assert.equal(harness.employeeField.last_value, "EMP-0042");
+	assert.equal(
+		harness.employeeField.title_value_map["Alice Active"],
+		"EMP-0042"
+	);
 	assert.equal(harness.identityRequests.length, 1);
 	assert.equal(
 		harness.identityRequests[0].method,
@@ -228,6 +255,77 @@ test("employee selection fills only Timesheet identity fields and shows the empl
 		"Alice Active",
 		"EMP-0042",
 	]);
+});
+
+test("employee ID is pinned before identity lookup and survives an early blur", async () => {
+	const harness = makeHarness();
+	let resolveIdentity;
+	harness.frappe.call = (options) => {
+		harness.identityRequests.push(options);
+		return new Promise((resolve) => {
+			resolveIdentity = resolve;
+		});
+	};
+
+	harness.handlers.before_load(harness.frm);
+	harness.handlers.onload_post_render(harness.frm);
+	harness.employeeField.label = "Alice Active";
+	harness.employeeField.$input.val("Alice Active");
+	harness.frm.doc.employee = "EMP-0042";
+	const selection = harness.handlers.employee(harness.frm);
+
+	assert.equal(harness.frm.__alumicraft_selected_employee, "EMP-0042");
+	assert.equal(harness.frm.doc.employee, "EMP-0042");
+	assert.equal(harness.employeeField.last_value, "EMP-0042");
+	assert.equal(
+		harness.employeeField.title_value_map["Alice Active"],
+		"EMP-0042"
+	);
+
+	// Reproduce Frappe writing a blank from the Link input before the request
+	// returns. The kiosk handler restores the picker selection synchronously.
+	harness.frm.doc.employee = null;
+	const blurRecovery = harness.handlers.employee(harness.frm);
+	assert.equal(blurRecovery, selection);
+	assert.equal(harness.frm.doc.employee, "EMP-0042");
+	assert.equal(harness.identityRequests.length, 1);
+
+	resolveIdentity({
+		message: {
+			company: "Alumicraft",
+			department: "Fabrication",
+			employee_name: "Alice Active",
+			name: "EMP-0042",
+		},
+	});
+	await selection;
+	assert.equal(harness.frm.doc.employee, "EMP-0042");
+	assert.equal(harness.frm.doc.employee_name, "Alice Active");
+});
+
+test("save hooks restore the canonical Employee ID after control state is lost", async () => {
+	const harness = makeHarness();
+
+	harness.handlers.before_load(harness.frm);
+	harness.handlers.onload_post_render(harness.frm);
+	harness.frm.doc.employee = "EMP-0042";
+	await harness.handlers.employee(harness.frm);
+
+	for (const eventName of ["validate", "before_save", "before_submit"]) {
+		harness.frm.doc.employee = null;
+		harness.employeeField.last_value = null;
+		harness.employeeField.title_value_map = {};
+		harness.employeeField.$input.val("");
+
+		await harness.handlers[eventName](harness.frm);
+
+		assert.equal(harness.frm.doc.employee, "EMP-0042");
+		assert.equal(harness.employeeField.last_value, "EMP-0042");
+		assert.equal(
+			harness.employeeField.title_value_map["Alice Active"],
+			"EMP-0042"
+		);
+	}
 });
 
 test("a slower employee response cannot overwrite a newer selection", async () => {

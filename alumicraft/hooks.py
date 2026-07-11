@@ -5,7 +5,7 @@ app_description = "Alumicraft custom Frappe app"
 app_email = "dev@alumicraft.local"
 app_license = "MIT"
 
-ALUMICRAFT_ASSET_VERSION = "20260710-3"
+ALUMICRAFT_ASSET_VERSION = "20260710-4"
 
 
 def versioned_asset(path):

@@ -49,19 +49,44 @@
 		}
 	}
 
-	function show_employee_label(frm, employee, employee_name) {
-		if (!employee || !employee_name) return;
+	function reset_employee_state(frm) {
+		frm.__alumicraft_employee_request =
+			(frm.__alumicraft_employee_request || 0) + 1;
+		delete frm.__alumicraft_selected_employee;
+		delete frm.__alumicraft_employee_label;
+		delete frm.__alumicraft_employee_identity;
+		delete frm.__alumicraft_employee_pending;
+	}
+
+	function pin_employee_control(frm, employee, employee_name) {
+		if (!employee || employee === EMPLOYEE_SENTINEL) return;
+
+		var label = employee_name || frm.__alumicraft_employee_label || employee;
+		frm.__alumicraft_selected_employee = employee;
+		if (employee_name) {
+			frm.__alumicraft_employee_label = employee_name;
+		}
+
+		// A Frappe Link stores the visible title separately from the document ID.
+		// Pin both synchronously so a blur cannot write the title (or a blank)
+		// back into the mandatory Employee field while identity data is loading.
+		frm.doc.employee = employee;
 
 		if (frappe.utils && typeof frappe.utils.add_link_title === "function") {
-			frappe.utils.add_link_title("Employee", employee, employee_name);
+			frappe.utils.add_link_title("Employee", employee, label);
 		}
 
 		var field = frm.fields_dict.employee;
-		if (
-			field &&
-			typeof field.translate_and_set_input_value === "function"
-		) {
-			field.translate_and_set_input_value(employee_name, employee);
+		if (!field) return;
+
+		field.title_value_map = field.title_value_map || {};
+		field.title_value_map[label] = employee;
+		field.last_value = employee;
+		field.label = label;
+		if (typeof field.translate_and_set_input_value === "function") {
+			field.translate_and_set_input_value(label, employee);
+		} else if (typeof field.set_input_value === "function") {
+			field.set_input_value(label);
 		}
 	}
 
@@ -104,10 +129,10 @@
 		}
 
 		remove_employee_open_button(frm);
-		if (frm.doc.employee && frm.__alumicraft_employee_label) {
-			show_employee_label(
+		if (frm.__alumicraft_selected_employee) {
+			pin_employee_control(
 				frm,
-				frm.doc.employee,
+				frm.__alumicraft_selected_employee,
 				frm.__alumicraft_employee_label
 			);
 		}
@@ -156,6 +181,22 @@
 		}
 
 		var selected_employee = frm.doc.employee;
+		var pinned_employee = frm.__alumicraft_selected_employee;
+		var pinned_label = frm.__alumicraft_employee_label;
+
+		// Link blur can run before Save or while the identity request is still in
+		// flight. Keep the last picker selection authoritative until the operator
+		// chooses a different Employee from the controlled search.
+		if (
+			pinned_employee &&
+			(!selected_employee ||
+				selected_employee === pinned_employee ||
+				selected_employee === pinned_label)
+		) {
+			pin_employee_control(frm, pinned_employee, pinned_label);
+			return frm.__alumicraft_employee_pending;
+		}
+
 		frm.__alumicraft_employee_request =
 			(frm.__alumicraft_employee_request || 0) + 1;
 		var request_number = frm.__alumicraft_employee_request;
@@ -164,14 +205,28 @@
 		DERIVED_FIELDS.forEach(function (fieldname) {
 			set_directly(frm, fieldname, null);
 		});
+		delete frm.__alumicraft_employee_identity;
 		delete frm.__alumicraft_employee_label;
 		set_directly(frm, "company", get_config().company || null);
 		set_directly(frm, "user", null);
 		remove_employee_open_button(frm);
 
-		if (!selected_employee) return;
+		if (!selected_employee) {
+			delete frm.__alumicraft_selected_employee;
+			delete frm.__alumicraft_employee_pending;
+			return;
+		}
 
-		return frappe
+		var field = frm.fields_dict.employee;
+		var provisional_label =
+			(field && field.label) ||
+			(field &&
+				typeof field.get_label_value === "function" &&
+				field.get_label_value()) ||
+			selected_employee;
+		pin_employee_control(frm, selected_employee, provisional_label);
+
+		var pending = frappe
 			.call({
 				method: EMPLOYEE_IDENTITY_METHOD,
 				type: "POST",
@@ -181,23 +236,65 @@
 				var identity = (response && response.message) || {};
 				if (
 					frm.__alumicraft_employee_request !== request_number ||
-					frm.doc.employee !== selected_employee ||
+					frm.__alumicraft_selected_employee !== selected_employee ||
 					identity.name !== selected_employee
 				) {
 					return;
 				}
 
+				frm.__alumicraft_employee_identity = identity;
 				frm.__alumicraft_employee_label = identity.employee_name;
 				set_directly(frm, "employee_name", identity.employee_name || null);
 				set_directly(frm, "department", identity.department || null);
 				set_directly(frm, "company", identity.company || null);
-				show_employee_label(
+				pin_employee_control(
 					frm,
 					selected_employee,
 					identity.employee_name
 				);
 				remove_employee_open_button(frm);
 			});
+
+		frm.__alumicraft_employee_pending = pending;
+		pending.then(
+			function () {
+				if (frm.__alumicraft_employee_pending === pending) {
+					delete frm.__alumicraft_employee_pending;
+				}
+			},
+			function () {
+				if (frm.__alumicraft_employee_pending === pending) {
+					delete frm.__alumicraft_employee_pending;
+				}
+			}
+		);
+		return pending;
+	}
+
+	function prepare_employee_for_save(frm) {
+		if (!is_enabled()) return;
+
+		var employee = frm.__alumicraft_selected_employee;
+		if (employee) {
+			pin_employee_control(
+				frm,
+				employee,
+				frm.__alumicraft_employee_label
+			);
+		}
+
+		var pending = frm.__alumicraft_employee_pending;
+		if (!pending) return;
+
+		return Promise.resolve(pending).then(function () {
+			if (frm.__alumicraft_selected_employee) {
+				pin_employee_control(
+					frm,
+					frm.__alumicraft_selected_employee,
+					frm.__alumicraft_employee_label
+				);
+			}
+		});
 	}
 
 	function open_fresh_timesheet() {
@@ -213,6 +310,7 @@
 	frappe.ui.form.on("Timesheet", {
 		setup: configure_fields,
 		before_load: function (frm) {
+			reset_employee_state(frm);
 			configure_fields(frm);
 			apply_shared_terminal_defaults(frm);
 		},
@@ -225,6 +323,9 @@
 			}
 		},
 		employee: employee_changed,
+		validate: prepare_employee_for_save,
+		before_save: prepare_employee_for_save,
+		before_submit: prepare_employee_for_save,
 		after_save: open_fresh_timesheet,
 		on_submit: open_fresh_timesheet,
 	});
