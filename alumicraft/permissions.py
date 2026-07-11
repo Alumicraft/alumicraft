@@ -1,11 +1,9 @@
 """Server-side permissions for Alumicraft kiosk accounts.
 
 The browser kiosk guard is only a navigation aid. This module is the data
-boundary: kiosk users cannot read Employee or User documents and can only
-create, read, update, and submit Timesheets for their one linked employee.
-
-The functions here are intentionally hook-ready. See the module tests and the
-handoff notes for the Frappe v16 hook mappings.
+boundary: kiosk users cannot open Employee or User documents, cannot list
+saved Timesheets, and can only write a Timesheet for an active employee chosen
+through the terminal's deliberately narrow employee picker.
 """
 
 import json
@@ -15,17 +13,16 @@ from urllib.parse import unquote
 import frappe
 from frappe import _
 
-from alumicraft.api.boot import is_kiosk_user
+from alumicraft.api.boot import get_kiosk_company, is_kiosk_user
 
 
 PROTECTED_DOCTYPES = frozenset(("Employee", "User"))
 TIMESHEET_DOCTYPE = "Timesheet"
 RELEVANT_DOCTYPES = PROTECTED_DOCTYPES | frozenset((TIMESHEET_DOCTYPE,))
 KIOSK_EMPLOYEE_FIELDS = ("name", "company", "employee_name", "department")
+KIOSK_EMPLOYEE_SEARCH_QUERY = "alumicraft.permissions.search_kiosk_employees"
 
-ALLOWED_TIMESHEET_PERMISSION_TYPES = frozenset(
-    ("create", "read", "select", "write", "submit")
-)
+ALLOWED_TIMESHEET_PERMISSION_TYPES = frozenset(("create", "write", "submit"))
 
 REPORT_AND_EXPORT_METHODS = frozenset(
     (
@@ -119,52 +116,99 @@ def _row_value(row, fieldname):
     return getattr(row, fieldname, None)
 
 
-def _linked_employee_records(user):
-    if not user or user in ("Administrator", "Guest"):
-        return []
+def _active_employee_identity(employee):
+    if not employee:
+        return None
 
-    return list(
+    employees = list(
         frappe.get_all(
             "Employee",
-            filters={"user_id": user, "status": "Active"},
+            filters={
+                "name": employee,
+                "status": "Active",
+                "company": get_kiosk_company(),
+            },
             fields=list(KIOSK_EMPLOYEE_FIELDS),
-            order_by="name asc",
             limit_page_length=2,
         )
         or []
     )
-
-
-def get_kiosk_timesheet_defaults(user=None):
-    """Return only the Employee values that must appear on a Timesheet."""
-
-    user = user or frappe.session.user
-    employees = _linked_employee_records(user)
     if len(employees) != 1:
-        return {}
+        return None
 
-    employee = employees[0]
-    employee_name = _row_value(employee, "name")
-    if not employee_name:
-        return {}
-
-    return {
-        "employee": employee_name,
-        "company": _row_value(employee, "company"),
-        "employee_name": _row_value(employee, "employee_name"),
-        "department": _row_value(employee, "department"),
-        "user": user,
+    result = {
+        fieldname: _row_value(employees[0], fieldname)
+        for fieldname in KIOSK_EMPLOYEE_FIELDS
     }
+    return result if result.get("name") == employee else None
 
 
-def get_kiosk_employee(user=None):
-    """Return the sole active Employee linked to a kiosk login, else ``None``.
+@frappe.whitelist()
+def search_kiosk_employees(
+    doctype,
+    txt,
+    searchfield,
+    start,
+    page_len,
+    filters=None,
+    **kwargs,
+):
+    """Return only the two labels required by the Timesheet employee picker."""
 
-    Failing closed when there are zero or multiple links prevents an accidental
-    association from granting access to the wrong person's Timesheets.
-    """
+    if (
+        not is_kiosk_user()
+        or doctype != "Employee"
+        or kwargs.get("reference_doctype") != TIMESHEET_DOCTYPE
+        or kwargs.get("link_fieldname") != "employee"
+    ):
+        _throw_permission(_("This employee search is only available in kiosk mode."))
 
-    return get_kiosk_timesheet_defaults(user).get("employee")
+    try:
+        start = max(int(start or 0), 0)
+    except (TypeError, ValueError):
+        start = 0
+    try:
+        page_len = min(max(int(page_len or 10), 1), 20)
+    except (TypeError, ValueError):
+        page_len = 10
+
+    query_filters = {
+        "status": "Active",
+        "company": get_kiosk_company(),
+    }
+    or_filters = None
+    txt = str(txt or "")[:100]
+    if txt:
+        pattern = "%{0}%".format(txt)
+        or_filters = {
+            "name": ["like", pattern],
+            "employee_name": ["like", pattern],
+        }
+
+    rows = frappe.get_all(
+        "Employee",
+        filters=query_filters,
+        or_filters=or_filters,
+        fields=["name", "employee_name"],
+        order_by="employee_name asc, name asc",
+        start=start,
+        page_length=page_len,
+        as_list=True,
+    )
+    return [list(row) for row in (rows or [])]
+
+
+@frappe.whitelist()
+def get_kiosk_employee_identity(employee):
+    """Return only the fields that the selected Employee contributes to a Timesheet."""
+
+    if not is_kiosk_user():
+        _throw_permission(_("This employee lookup is only available in kiosk mode."))
+
+    identity = _active_employee_identity(employee)
+    if not identity:
+        _throw_permission(_("Please choose an active Alumicraft Employee."))
+    return identity
 
 
 def deny_protected_doctype_query(user, doctype=None):
@@ -186,18 +230,11 @@ def protected_doctype_has_permission(
 
 
 def timesheet_query_conditions(user, doctype=None):
-    """Restrict kiosk list queries to Timesheets for their linked employee."""
+    """Shared terminals never list saved Timesheets."""
 
     if not is_kiosk_user(user):
         return ""
-
-    defaults = get_kiosk_timesheet_defaults(user)
-    employee = defaults.get("employee")
-    if not employee:
-        return "1 = 0"
-
-    escaped_employee = frappe.db.escape(employee, percent=False)
-    return "`tabTimesheet`.`employee` = {0}".format(escaped_employee)
+    return "1 = 0"
 
 
 def timesheet_has_permission(doc, user=None, ptype=None, debug=False):
@@ -208,56 +245,65 @@ def timesheet_has_permission(doc, user=None, ptype=None, debug=False):
         # they do not deny access.
         return True
 
-    employee = get_kiosk_employee(user)
-    if not employee:
-        return False
-
     document_employee = _document_value(doc, "employee")
 
-    # Frappe checks create permission before before_validate runs. A blank
-    # employee is safe here because validate_kiosk_timesheet fills it in.
-    if ptype == "create" and not document_employee:
-        return True
+    # Frappe checks create permission before the operator has selected an
+    # employee and before before_validate runs.
+    if ptype == "create":
+        return not document_employee or bool(
+            _active_employee_identity(document_employee)
+        )
 
-    if ptype is not None and ptype not in ALLOWED_TIMESHEET_PERMISSION_TYPES:
+    if ptype not in ALLOWED_TIMESHEET_PERMISSION_TYPES:
         return False
 
-    return document_employee == employee
+    return bool(
+        _document_value(doc, "owner") == user
+        and _active_employee_identity(document_employee)
+    )
 
 
 def validate_kiosk_timesheet(doc, method=None):
-    """Bind every kiosk Timesheet write to the login's one Employee record."""
+    """Bind every kiosk Timesheet write to one selected active Employee."""
 
     user = frappe.session.user
     if not is_kiosk_user(user):
         return
 
-    defaults = get_kiosk_timesheet_defaults(user)
-    employee = defaults.get("employee")
-    if not employee:
-        _throw_permission(
-            _(
-                "This kiosk login must be linked to exactly one active Employee "
-                "before it can save a Timesheet."
-            )
-        )
-
     document_employee = _document_value(doc, "employee")
-    if not document_employee:
-        setattr(doc, "employee", employee)
-    elif document_employee != employee:
-        _throw_permission(
-            _(
-                "This kiosk login can only save Timesheets for its assigned "
-                "employee."
-            )
+    defaults = _active_employee_identity(document_employee)
+    if not defaults:
+        _throw_permission(_("Please choose an active Employee before saving."))
+
+    is_new = getattr(doc, "is_new", None)
+    is_new = is_new() if callable(is_new) else not _document_value(doc, "name")
+    if not is_new:
+        stored = frappe.db.get_value(
+            TIMESHEET_DOCTYPE,
+            _document_value(doc, "name"),
+            ["owner", "employee"],
+            as_dict=True,
         )
+        if (
+            not stored
+            or _row_value(stored, "owner") != user
+            or _row_value(stored, "employee") != document_employee
+        ):
+            _throw_permission(
+                _(
+                    "The shared terminal cannot change an existing Timesheet "
+                    "owner or Employee."
+                )
+            )
 
     # Treat the client values only as presentation defaults. Re-apply the
     # authoritative Employee-derived values on every write so a crafted request
-    # cannot change company, department, employee name, or owning user.
+    # cannot change company, department, or employee name. The shared terminal
+    # intentionally leaves Timesheet.user blank, matching the historical flow
+    # and avoiding false overlap conflicts between different employees.
     for fieldname, value in defaults.items():
         setattr(doc, fieldname, value)
+    setattr(doc, "user", None)
 
 
 def deny_kiosk_timesheet_mutation(doc, method=None, *args, **kwargs):
@@ -422,25 +468,21 @@ def _is_document_collection_request(path):
     )
 
 
-def _add_timesheet_employee_filter(form, employee):
-    raw_filters = form.get("filters")
-    filters = _parse_json_if_possible(raw_filters)
+def _is_kiosk_employee_search_request(form, command):
+    """Recognize the one Employee projection used by the Timesheet Link field."""
 
-    if filters in (None, ""):
-        filters = []
-
-    if isinstance(filters, dict):
-        filters["employee"] = employee
-    elif isinstance(filters, (list, tuple)):
-        filters = list(filters)
-        filters.append([TIMESHEET_DOCTYPE, "employee", "=", employee])
-    elif isinstance(filters, str):
-        # get_value also accepts a document name in place of a filter mapping.
-        filters = {"name": filters, "employee": employee}
-    else:
-        _throw_permission(_("Invalid Timesheet filters for kiosk mode."))
-
-    form["filters"] = filters
+    filters = _parse_json_if_possible(form.get("filters"))
+    ignore_permissions = str(form.get("ignore_user_permissions") or "").lower()
+    return bool(
+        command == "frappe.desk.search.search_link"
+        and _request_method() in ("GET", "POST")
+        and form.get("doctype") == "Employee"
+        and form.get("query") == KIOSK_EMPLOYEE_SEARCH_QUERY
+        and form.get("reference_doctype") == TIMESHEET_DOCTYPE
+        and form.get("link_fieldname") == "employee"
+        and filters in (None, "", {}, [])
+        and ignore_permissions in ("", "0", "false")
+    )
 
 
 def before_request():
@@ -453,11 +495,22 @@ def before_request():
     path = _request_path()
     command = _request_command(form, path)
     requested_doctypes = _requested_doctypes(form, path)
+    allowed_employee_search = _is_kiosk_employee_search_request(form, command)
+    protected_doctypes = requested_doctypes.intersection(PROTECTED_DOCTYPES)
 
-    if requested_doctypes.intersection(PROTECTED_DOCTYPES):
+    if (
+        protected_doctypes
+        and (
+            not allowed_employee_search
+            or protected_doctypes != {"Employee"}
+        )
+    ):
         _throw_permission(
             _("Kiosk accounts cannot access Employee or User records.")
         )
+
+    if allowed_employee_search:
+        return
 
     if command in SENSITIVE_DATA_METHODS:
         _throw_permission(
@@ -486,13 +539,6 @@ def before_request():
     ):
         return
 
-    employee = get_kiosk_employee()
-    if not employee:
-        _throw_permission(
-            _(
-                "This kiosk login must be linked to exactly one active Employee "
-                "before it can list Timesheets."
-            )
-        )
-
-    _add_timesheet_employee_filter(form, employee)
+    _throw_permission(
+        _("Saved Timesheets are not available from the shared terminal.")
+    )

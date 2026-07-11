@@ -5,7 +5,7 @@ app_description = "Alumicraft custom Frappe app"
 app_email = "dev@alumicraft.local"
 app_license = "MIT"
 
-ALUMICRAFT_ASSET_VERSION = "20260710-2"
+ALUMICRAFT_ASSET_VERSION = "20260710-3"
 
 
 def versioned_asset(path):
@@ -20,14 +20,11 @@ extend_bootinfo = "alumicraft.api.boot.boot_session"
 app_include_js = [
     versioned_asset("/assets/alumicraft/js/sidebar_fix.js"),
     versioned_asset("/assets/alumicraft/js/kiosk_timesheet.js"),
+    versioned_asset("/assets/alumicraft/js/timesheet_kiosk.js"),
 ]
 
-# Timesheet form support for kiosk sessions. The script injects only the
-# minimal Employee-derived defaults already required on a Timesheet and avoids
-# Frappe's normal direct Employee lookup.
-doctype_js = {
-    "Timesheet": "public/js/timesheet_kiosk.js",
-}
+# Timesheet kiosk support is an app asset rather than ``doctype_js`` so a new
+# deployment cannot be hidden behind Frappe's cached Timesheet FormMeta.
 
 # Server-side kiosk boundary. The browser guard prevents accidental
 # navigation; these hooks prevent direct REST/RPC access to the underlying

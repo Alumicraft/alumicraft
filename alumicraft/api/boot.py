@@ -14,6 +14,7 @@ DEFAULT_KIOSK_ROLES = (
 # accidentally added later. Additional kiosk accounts can be supplied through
 # ``alumicraft_kiosk_users`` in site_config.json.
 DEFAULT_KIOSK_USERS = ("kiosk@drivealumicraft.com",)
+DEFAULT_KIOSK_COMPANY = "Alumicraft"
 
 DEFAULT_TIMESHEET_ROUTE = ("Form", "Timesheet", "new-timesheet")
 
@@ -112,6 +113,15 @@ def _kiosk_target_route():
     return route
 
 
+def get_kiosk_company():
+    """Return the one company whose employees appear on the shared terminal."""
+
+    return (
+        _clean_list_item(frappe.conf.get("alumicraft_kiosk_company") or "")
+        or DEFAULT_KIOSK_COMPANY
+    )
+
+
 def is_kiosk_user(user=None):
     """Return whether ``user`` should receive Alumicraft kiosk restrictions."""
 
@@ -155,10 +165,6 @@ def _hide_desk_navigation(bootinfo):
 
 
 def _set_kiosk_boot(bootinfo):
-    # Import locally to keep the shared kiosk classifier in this module while
-    # avoiding an import cycle when permission hooks load at request start.
-    from alumicraft.permissions import get_kiosk_timesheet_defaults
-
     route = _kiosk_target_route()
     target_doctype = route[1] if len(route) > 1 else "Timesheet"
 
@@ -170,7 +176,7 @@ def _set_kiosk_boot(bootinfo):
             "roles": _kiosk_roles(),
             "target_route": route,
             "target_doctype": target_doctype,
-            "timesheet_defaults": get_kiosk_timesheet_defaults(),
+            "company": get_kiosk_company(),
         },
     )
     _hide_desk_navigation(bootinfo)

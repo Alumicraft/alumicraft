@@ -8,7 +8,7 @@
 (function () {
 	"use strict";
 
-	var VERSION = "20260710-2";
+	var VERSION = "20260710-3";
 	var STYLE_ID = "alumicraft-kiosk-style";
 	var ROUTING = false;
 	var ROUTER_PATCHED = false;
