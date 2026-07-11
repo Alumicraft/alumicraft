@@ -10,6 +10,11 @@ DEFAULT_KIOSK_ROLES = (
     "Employee",
 )
 
+# The production terminal login must remain restricted even if another role is
+# accidentally added later. Additional kiosk accounts can be supplied through
+# ``alumicraft_kiosk_users`` in site_config.json.
+DEFAULT_KIOSK_USERS = ("kiosk@drivealumicraft.com",)
+
 DEFAULT_TIMESHEET_ROUTE = ("Form", "Timesheet", "new-timesheet")
 
 PRIVILEGED_ROLES = (
@@ -87,6 +92,14 @@ def _kiosk_roles():
     )
 
 
+def _kiosk_users():
+    configured_users = _coerce_list(
+        frappe.conf.get("alumicraft_kiosk_users"),
+        (),
+    )
+    return list(dict.fromkeys((*DEFAULT_KIOSK_USERS, *configured_users)))
+
+
 def _kiosk_target_route():
     route = _coerce_list(
         frappe.conf.get("alumicraft_kiosk_target_route"),
@@ -99,16 +112,35 @@ def _kiosk_target_route():
     return route
 
 
-def _is_kiosk_user():
-    user = frappe.session.user
+def is_kiosk_user(user=None):
+    """Return whether ``user`` should receive Alumicraft kiosk restrictions."""
+
+    user = user or frappe.session.user
     if user in ("Administrator", "Guest"):
         return False
 
+    if user in _kiosk_users():
+        return True
+
     roles = set(frappe.get_roles(user) or [])
+
+    # A dedicated kiosk role always wins. The generic Employee role keeps its
+    # legacy behaviour but can still be paired with a manager role for normal
+    # back-office users.
+    dedicated_kiosk_roles = set(_kiosk_roles()) - {"Employee"}
+    if roles.intersection(dedicated_kiosk_roles):
+        return True
+
     if roles.intersection(PRIVILEGED_ROLES):
         return False
 
     return bool(roles.intersection(_kiosk_roles()))
+
+
+def _is_kiosk_user():
+    """Backward-compatible wrapper for the original boot helper."""
+
+    return is_kiosk_user()
 
 
 def _hide_desk_navigation(bootinfo):
@@ -123,6 +155,10 @@ def _hide_desk_navigation(bootinfo):
 
 
 def _set_kiosk_boot(bootinfo):
+    # Import locally to keep the shared kiosk classifier in this module while
+    # avoiding an import cycle when permission hooks load at request start.
+    from alumicraft.permissions import get_kiosk_timesheet_defaults
+
     route = _kiosk_target_route()
     target_doctype = route[1] if len(route) > 1 else "Timesheet"
 
@@ -134,6 +170,7 @@ def _set_kiosk_boot(bootinfo):
             "roles": _kiosk_roles(),
             "target_route": route,
             "target_doctype": target_doctype,
+            "timesheet_defaults": get_kiosk_timesheet_defaults(),
         },
     )
     _hide_desk_navigation(bootinfo)
