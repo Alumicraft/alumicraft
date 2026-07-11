@@ -303,8 +303,12 @@ def validate_kiosk_timesheet(doc, method=None):
     # cannot change company, department, or employee name. The shared terminal
     # intentionally leaves Timesheet.user blank, matching the historical flow
     # and avoiding false overlap conflicts between different employees.
-    for fieldname, value in defaults.items():
-        setattr(doc, fieldname, value)
+    # ``defaults.name`` is the Employee ID, not the Timesheet document name.
+    # Copy it into Timesheet.employee explicitly and leave Frappe's Timesheet
+    # naming series untouched.
+    setattr(doc, "employee", defaults["name"])
+    for fieldname in ("company", "employee_name", "department"):
+        setattr(doc, fieldname, defaults.get(fieldname))
     setattr(doc, "user", None)
 
 

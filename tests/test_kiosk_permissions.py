@@ -485,10 +485,11 @@ class KioskPermissionTests(unittest.TestCase):
             self.permissions.before_request()
 
     def test_active_employee_validation_overwrites_identity_and_blanks_user(self):
-        doc = Doc("EMP-0001")
+        doc = Doc("EMP-0001", name="new-timesheet-test")
 
         self.permissions.validate_kiosk_timesheet(doc)
 
+        self.assertEqual(doc.name, "new-timesheet-test")
         self.assertEqual(doc.employee, "EMP-0001")
         self.assertEqual(doc.company, "Alumicraft")
         self.assertEqual(doc.employee_name, "Alice Active")
@@ -504,6 +505,7 @@ class KioskPermissionTests(unittest.TestCase):
     def test_existing_timesheet_validation_is_owner_and_employee_bound(self):
         allowed = Doc("EMP-0001", name="TS-OWN", is_new=False)
         self.permissions.validate_kiosk_timesheet(allowed)
+        self.assertEqual(allowed.name, "TS-OWN")
         self.assertIsNone(allowed.user)
 
         changed_employee = Doc("EMP-0002", name="TS-OWN", is_new=False)
