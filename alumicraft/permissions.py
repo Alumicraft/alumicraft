@@ -8,6 +8,7 @@ through the terminal's deliberately narrow employee picker.
 
 import json
 import re
+from datetime import date
 from urllib.parse import unquote
 
 import frappe
@@ -21,6 +22,7 @@ TIMESHEET_DOCTYPE = "Timesheet"
 RELEVANT_DOCTYPES = PROTECTED_DOCTYPES | frozenset((TIMESHEET_DOCTYPE,))
 KIOSK_EMPLOYEE_FIELDS = ("name", "company", "employee_name", "department")
 KIOSK_EMPLOYEE_SEARCH_QUERY = "alumicraft.permissions.search_kiosk_employees"
+KIOSK_EMPLOYEE_SENTINEL = "\u2063"
 
 ALLOWED_TIMESHEET_PERMISSION_TYPES = frozenset(("create", "write", "submit"))
 
@@ -500,6 +502,117 @@ def _is_kiosk_employee_search_request(form, command):
     )
 
 
+def _is_safe_timesheet_summary_request(form, command):
+    """Recognize the preserved weekly-summary probe handled below as empty."""
+
+    if (
+        command != "frappe.client.get_list"
+        or _request_method() != "POST"
+        or form.get("doctype") != TIMESHEET_DOCTYPE
+        or str(form.get("limit_page_length")) != "0"
+    ):
+        return False
+
+    allowed_keys = {
+        "cmd",
+        "doctype",
+        "fields",
+        "filters",
+        "limit_page_length",
+    }
+    if set(form).difference(allowed_keys):
+        return False
+
+    fields = _parse_json_if_possible(form.get("fields"))
+    filters = _parse_json_if_possible(form.get("filters"))
+    if fields != ["name"] or not isinstance(filters, dict):
+        return False
+
+    if set(filters) != {"employee", "docstatus", "start_date", "end_date"}:
+        return False
+
+    employee = filters.get("employee")
+    if not isinstance(employee, str) or not employee:
+        return False
+    if (
+        employee != KIOSK_EMPLOYEE_SENTINEL
+        and not _active_employee_identity(employee)
+    ):
+        return False
+
+    if _parse_json_if_possible(filters.get("docstatus")) != ["<", 2]:
+        return False
+
+    start_filter = _parse_json_if_possible(filters.get("start_date"))
+    end_filter = _parse_json_if_possible(filters.get("end_date"))
+    if (
+        not isinstance(start_filter, list)
+        or len(start_filter) != 2
+        or start_filter[0] != "<="
+        or not isinstance(end_filter, list)
+        or len(end_filter) != 2
+        or end_filter[0] != ">="
+    ):
+        return False
+
+    try:
+        week_end = date.fromisoformat(str(start_filter[1]))
+        week_start = date.fromisoformat(str(end_filter[1]))
+    except (TypeError, ValueError):
+        return False
+
+    return 0 <= (week_end - week_start).days <= 7
+
+
+@frappe.whitelist()
+def guarded_client_get_list(
+    doctype,
+    fields=None,
+    filters=None,
+    group_by=None,
+    order_by=None,
+    limit_start=None,
+    limit_page_length=20,
+    parent=None,
+    debug: bool = False,
+    as_dict: bool = True,
+    or_filters=None,
+    expand=None,
+):
+    """Return a literal empty list for the kiosk weekly-summary request.
+
+    This is deliberately handled before Frappe's database query. Permission
+    conditions can be widened by explicit document shares, so relying on a
+    false SQL condition alone would not be an adequate security boundary.
+    """
+
+    if is_kiosk_user() and doctype == TIMESHEET_DOCTYPE:
+        if not _is_safe_timesheet_summary_request(
+            _form_dict(), "frappe.client.get_list"
+        ):
+            _throw_permission(
+                _("Saved Timesheets are not available from the shared terminal.")
+            )
+        return []
+
+    from frappe.client import get_list
+
+    return get_list(
+        doctype=doctype,
+        fields=fields,
+        filters=filters,
+        group_by=group_by,
+        order_by=order_by,
+        limit_start=limit_start,
+        limit_page_length=limit_page_length,
+        parent=parent,
+        debug=debug,
+        as_dict=as_dict,
+        or_filters=or_filters,
+        expand=expand,
+    )
+
+
 def before_request():
     """Close standard REST/RPC/report/export bypasses for kiosk sessions."""
 
@@ -511,6 +624,7 @@ def before_request():
     command = _request_command(form, path)
     requested_doctypes = _requested_doctypes(form, path)
     allowed_employee_search = _is_kiosk_employee_search_request(form, command)
+    safe_timesheet_summary = _is_safe_timesheet_summary_request(form, command)
     protected_doctypes = requested_doctypes.intersection(PROTECTED_DOCTYPES)
 
     if (
@@ -525,6 +639,9 @@ def before_request():
         )
 
     if allowed_employee_search:
+        return
+
+    if safe_timesheet_summary:
         return
 
     if command in SENSITIVE_DATA_METHODS:

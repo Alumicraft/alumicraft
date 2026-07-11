@@ -23,6 +23,12 @@ app_include_js = [
     versioned_asset("/assets/alumicraft/js/timesheet_kiosk.js"),
 ]
 
+# Keep the existing Timesheet Field Behavior weekly-summary call quiet without
+# allowing it to query saved Timesheet names for the shared kiosk account.
+override_whitelisted_methods = {
+    "frappe.client.get_list": "alumicraft.permissions.guarded_client_get_list",
+}
+
 # Timesheet kiosk support is an app asset rather than ``doctype_js`` so a new
 # deployment cannot be hidden behind Frappe's cached Timesheet FormMeta.
 

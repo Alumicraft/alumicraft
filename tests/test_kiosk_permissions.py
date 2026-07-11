@@ -263,6 +263,21 @@ class KioskPermissionTests(unittest.TestCase):
             "page_length": "10",
         }
 
+    def _safe_timesheet_summary_form(self, employee="\u2063"):
+        return {
+            "doctype": "Timesheet",
+            "filters": json.dumps(
+                {
+                    "employee": employee,
+                    "docstatus": ["<", 2],
+                    "start_date": ["<=", "2026-07-12"],
+                    "end_date": [">=", "2026-07-06"],
+                }
+            ),
+            "fields": '["name"]',
+            "limit_page_length": "0",
+        }
+
     def test_kiosk_classification_remains_fail_closed(self):
         self.assertTrue(self.boot.is_kiosk_user("kiosk@example.com"))
         self.assertTrue(self.boot.is_kiosk_user("mixed@example.com"))
@@ -530,6 +545,64 @@ class KioskPermissionTests(unittest.TestCase):
         }
 
         self.permissions.before_request()
+
+    def test_only_empty_weekly_summary_probe_is_allowed(self):
+        self.frappe.local.request = types.SimpleNamespace(
+            path="/api/method/frappe.client.get_list",
+            method="POST",
+        )
+
+        for employee in ("\u2063", "EMP-0001"):
+            with self.subTest(employee=employee):
+                self.frappe.local.form_dict = self._safe_timesheet_summary_form(
+                    employee
+                )
+                self.permissions.before_request()
+                self.assertEqual(
+                    self.permissions.guarded_client_get_list(
+                        "Timesheet",
+                        fields='["name"]',
+                        filters=self.frappe.local.form_dict["filters"],
+                        limit_page_length=0,
+                    ),
+                    [],
+                )
+
+        unsafe_overrides = (
+            {"fields": '["name", "employee"]'},
+            {"limit_page_length": "20"},
+            {"order_by": "creation desc"},
+            {"filters": json.dumps({"employee": "EMP-0001"})},
+            {
+                "filters": self._safe_timesheet_summary_form(
+                    "EMP-0003"
+                )["filters"]
+            },
+            {
+                "filters": json.dumps(
+                    {
+                        "employee": "EMP-0001",
+                        "docstatus": ["<", 2],
+                        "start_date": ["<=", "2026-08-01"],
+                        "end_date": [">=", "2026-07-01"],
+                    }
+                )
+            },
+        )
+        for override in unsafe_overrides:
+            with self.subTest(override=override):
+                self.frappe.local.form_dict = self._safe_timesheet_summary_form()
+                self.frappe.local.form_dict.update(override)
+                with self.assertRaises(FakePermissionError):
+                    self.permissions.before_request()
+
+        self.frappe.local.request = types.SimpleNamespace(
+            path="/api/method/frappe.client.get_list",
+            method="GET",
+        )
+        self.frappe.local.form_dict = self._safe_timesheet_summary_form()
+        with self.assertRaises(FakePermissionError):
+            self.permissions.before_request()
 
     def test_timesheet_write_and_submit_are_owner_bound(self):
         own = Doc("EMP-0001", owner="kiosk@example.com")
