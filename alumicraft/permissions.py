@@ -468,6 +468,21 @@ def _is_document_collection_request(path):
     )
 
 
+def _is_timesheet_collection_request(form, path, command):
+    if _is_document_collection_request(path):
+        return True
+
+    primary_doctype = (
+        form.get("doctype")
+        or form.get("dt")
+        or form.get("document_type")
+    )
+    return bool(
+        primary_doctype == TIMESHEET_DOCTYPE
+        and command in TIMESHEET_COLLECTION_METHODS
+    )
+
+
 def _is_kiosk_employee_search_request(form, command):
     """Recognize the one Employee projection used by the Timesheet Link field."""
 
@@ -530,13 +545,7 @@ def before_request():
             _("Kiosk accounts cannot expand Employee or User record fields.")
         )
 
-    if TIMESHEET_DOCTYPE not in requested_doctypes:
-        return
-
-    if not (
-        command in TIMESHEET_COLLECTION_METHODS
-        or _is_document_collection_request(path)
-    ):
+    if not _is_timesheet_collection_request(form, path, command):
         return
 
     _throw_permission(

@@ -517,6 +517,20 @@ class KioskPermissionTests(unittest.TestCase):
         with self.assertRaises(FakePermissionError):
             self.permissions.before_request()
 
+    def test_timesheet_link_fields_do_not_count_as_saved_timesheet_lists(self):
+        self.frappe.local.request = types.SimpleNamespace(
+            path="/api/method/frappe.desk.search.search_link",
+            method="POST",
+        )
+        self.frappe.local.form_dict = {
+            "doctype": "Company",
+            "txt": "Alumicraft",
+            "reference_doctype": "Timesheet",
+            "link_fieldname": "company",
+        }
+
+        self.permissions.before_request()
+
     def test_timesheet_write_and_submit_are_owner_bound(self):
         own = Doc("EMP-0001", owner="kiosk@example.com")
         other_owner = Doc("EMP-0001", owner="other@example.com")
