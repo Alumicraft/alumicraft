@@ -23,6 +23,7 @@ RELEVANT_DOCTYPES = PROTECTED_DOCTYPES | frozenset((TIMESHEET_DOCTYPE,))
 KIOSK_EMPLOYEE_FIELDS = ("name", "company", "employee_name", "department")
 KIOSK_EMPLOYEE_SEARCH_QUERY = "alumicraft.permissions.search_kiosk_employees"
 KIOSK_EMPLOYEE_SENTINEL = "\u2063"
+KIOSK_EMPLOYEE_LINK_VALIDATION = "frappe.client.validate_link_and_fetch"
 
 ALLOWED_TIMESHEET_PERMISSION_TYPES = frozenset(("create", "write", "submit"))
 
@@ -522,6 +523,21 @@ def _is_empty_kiosk_employee_value_request(form, command):
     )
 
 
+def _is_kiosk_employee_link_validation_request(form, command):
+    """Recognize validation for the Timesheet's controlled Employee picker."""
+
+    ignore_permissions = str(form.get("ignore_user_permissions") or "").lower()
+    return bool(
+        command == KIOSK_EMPLOYEE_LINK_VALIDATION
+        and _request_method() in ("GET", "POST")
+        and form.get("doctype") == "Employee"
+        and form.get("query") == KIOSK_EMPLOYEE_SEARCH_QUERY
+        and form.get("reference_doctype") == TIMESHEET_DOCTYPE
+        and form.get("link_fieldname") == "employee"
+        and ignore_permissions in ("", "0", "false")
+    )
+
+
 def _is_safe_timesheet_summary_request(form, command):
     """Recognize the preserved weekly-summary probe handled below as empty."""
 
@@ -665,6 +681,53 @@ def guarded_client_get_value(
     )
 
 
+@frappe.whitelist(methods=["GET", "POST"])
+def guarded_validate_link_and_fetch(
+    doctype,
+    docname,
+    fields_to_fetch=None,
+    query=None,
+    filters=None,
+    **search_args,
+):
+    """Validate the controlled picker without exposing an Employee document."""
+
+    if is_kiosk_user() and doctype == "Employee":
+        if not _is_kiosk_employee_link_validation_request(
+            _form_dict(), KIOSK_EMPLOYEE_LINK_VALIDATION
+        ):
+            _throw_permission(
+                _("Kiosk accounts cannot access Employee or User records.")
+            )
+
+        if not docname or docname == KIOSK_EMPLOYEE_SENTINEL:
+            return {}
+
+        identity = _active_employee_identity(docname)
+        if not identity:
+            return {}
+
+        requested_fields = _parse_json_if_possible(fields_to_fetch) or []
+        if isinstance(requested_fields, str):
+            requested_fields = [requested_fields]
+        result = {"name": identity["name"]}
+        for fieldname in requested_fields:
+            if fieldname in KIOSK_EMPLOYEE_FIELDS and fieldname != "name":
+                result[fieldname] = identity.get(fieldname)
+        return result
+
+    from frappe.client import validate_link_and_fetch
+
+    return validate_link_and_fetch(
+        doctype=doctype,
+        docname=docname,
+        fields_to_fetch=fields_to_fetch,
+        query=query,
+        filters=filters,
+        **search_args,
+    )
+
+
 def before_request():
     """Close standard REST/RPC/report/export bypasses for kiosk sessions."""
 
@@ -679,13 +742,20 @@ def before_request():
     empty_employee_value = _is_empty_kiosk_employee_value_request(
         form, command
     )
+    allowed_employee_validation = _is_kiosk_employee_link_validation_request(
+        form, command
+    )
     safe_timesheet_summary = _is_safe_timesheet_summary_request(form, command)
     protected_doctypes = requested_doctypes.intersection(PROTECTED_DOCTYPES)
 
     if (
         protected_doctypes
         and (
-            not (allowed_employee_search or empty_employee_value)
+            not (
+                allowed_employee_search
+                or empty_employee_value
+                or allowed_employee_validation
+            )
             or protected_doctypes != {"Employee"}
         )
     ):
@@ -697,6 +767,9 @@ def before_request():
         return
 
     if empty_employee_value:
+        return
+
+    if allowed_employee_validation:
         return
 
     if safe_timesheet_summary:

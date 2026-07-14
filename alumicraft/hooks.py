@@ -28,6 +28,9 @@ app_include_js = [
 override_whitelisted_methods = {
     "frappe.client.get_list": "alumicraft.permissions.guarded_client_get_list",
     "frappe.client.get_value": "alumicraft.permissions.guarded_client_get_value",
+    "frappe.client.validate_link_and_fetch": (
+        "alumicraft.permissions.guarded_validate_link_and_fetch"
+    ),
 }
 
 # Timesheet kiosk support is an app asset rather than ``doctype_js`` so a new

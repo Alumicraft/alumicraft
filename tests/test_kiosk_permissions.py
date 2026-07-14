@@ -292,6 +292,20 @@ class KioskPermissionTests(unittest.TestCase):
             "filters": json.dumps({"user_id": "kiosk@example.com"}),
         }
 
+    def _safe_employee_validation_form(self, employee="\u2063"):
+        return {
+            "doctype": "Employee",
+            "docname": employee,
+            "txt": employee,
+            "query": "alumicraft.permissions.search_kiosk_employees",
+            "reference_doctype": "Timesheet",
+            "link_fieldname": "employee",
+            "page_length": "10",
+            "fields_to_fetch": json.dumps(
+                ["employee_name", "department", "company"]
+            ),
+        }
+
     def test_kiosk_classification_remains_fail_closed(self):
         self.assertTrue(self.boot.is_kiosk_user("kiosk@example.com"))
         self.assertTrue(self.boot.is_kiosk_user("mixed@example.com"))
@@ -478,6 +492,64 @@ class KioskPermissionTests(unittest.TestCase):
             )
         )
         self.assertIsNone(self.frappe.last_get_all)
+
+    def test_controlled_employee_link_validation_returns_only_picker_fields(self):
+        self.frappe.local.request = types.SimpleNamespace(
+            path="/api/method/frappe.client.validate_link_and_fetch",
+            method="POST",
+        )
+
+        self.frappe.local.form_dict = self._safe_employee_validation_form()
+        self.permissions.before_request()
+        self.assertEqual(
+            self.permissions.guarded_validate_link_and_fetch(
+                "Employee",
+                "\u2063",
+                fields_to_fetch='["employee_name", "department", "company"]',
+                query="alumicraft.permissions.search_kiosk_employees",
+                reference_doctype="Timesheet",
+                link_fieldname="employee",
+            ),
+            {},
+        )
+        self.assertIsNone(self.frappe.last_get_all)
+
+        self.frappe.local.form_dict = self._safe_employee_validation_form(
+            "EMP-0001"
+        )
+        self.permissions.before_request()
+        self.assertEqual(
+            self.permissions.guarded_validate_link_and_fetch(
+                "Employee",
+                "EMP-0001",
+                fields_to_fetch=(
+                    '["employee_name", "department", "company", "user_id"]'
+                ),
+                query="alumicraft.permissions.search_kiosk_employees",
+                reference_doctype="Timesheet",
+                link_fieldname="employee",
+            ),
+            {
+                "name": "EMP-0001",
+                "employee_name": "Alice Active",
+                "department": "Fabrication",
+                "company": "Alumicraft",
+            },
+        )
+
+        for override in (
+            {"reference_doctype": "Employee"},
+            {"link_fieldname": "user_id"},
+            {"query": None},
+            {"ignore_user_permissions": "1"},
+        ):
+            with self.subTest(override=override):
+                self.frappe.local.form_dict = self._safe_employee_validation_form(
+                    "EMP-0001"
+                )
+                self.frappe.local.form_dict.update(override)
+                with self.assertRaises(FakePermissionError):
+                    self.permissions.before_request()
 
     def test_direct_custom_search_http_call_is_denied(self):
         self.frappe.local.request = types.SimpleNamespace(
