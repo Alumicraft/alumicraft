@@ -23,6 +23,7 @@ RELEVANT_DOCTYPES = PROTECTED_DOCTYPES | frozenset((TIMESHEET_DOCTYPE,))
 KIOSK_EMPLOYEE_FIELDS = ("name", "company", "employee_name", "department")
 KIOSK_EMPLOYEE_SEARCH_QUERY = "alumicraft.permissions.search_kiosk_employees"
 KIOSK_EMPLOYEE_SENTINEL = "\u2063"
+KIOSK_EMPLOYEE_BOOTSTRAP_FIELDS = ("name", "company")
 
 ALLOWED_TIMESHEET_PERMISSION_TYPES = frozenset(("create", "write", "submit"))
 
@@ -506,6 +507,41 @@ def _is_kiosk_employee_search_request(form, command):
     )
 
 
+def _is_safe_kiosk_employee_bootstrap_request(form, command):
+    """Recognize ERPNext's automatic Employee lookup for the current login.
+
+    A shared terminal is deliberately not linked to one Employee. Returning an
+    empty result for this exact request prevents ERPNext's stock Timesheet
+    onload handler from raising a permission modal without revealing any
+    Employee data.
+    """
+
+    if (
+        command != "frappe.client.get_value"
+        or _request_method() != "GET"
+        or form.get("doctype") != "Employee"
+    ):
+        return False
+
+    allowed_keys = {
+        "cmd",
+        "doctype",
+        "fieldname",
+        "filters",
+        "parent",
+    }
+    if set(form).difference(allowed_keys):
+        return False
+
+    fieldname = _parse_json_if_possible(form.get("fieldname"))
+    filters = _parse_json_if_possible(form.get("filters"))
+    return bool(
+        fieldname == list(KIOSK_EMPLOYEE_BOOTSTRAP_FIELDS)
+        and filters == {"user_id": frappe.session.user}
+        and form.get("parent") in (None, "")
+    )
+
+
 def _is_safe_timesheet_summary_request(form, command):
     """Recognize the preserved weekly-summary probe handled below as empty."""
 
@@ -617,6 +653,38 @@ def guarded_client_get_list(
     )
 
 
+@frappe.whitelist()
+def guarded_client_get_value(
+    doctype,
+    fieldname,
+    filters=None,
+    as_dict=True,
+    debug=False,
+    parent=None,
+):
+    """Return no Employee for ERPNext's shared-terminal startup lookup."""
+
+    if is_kiosk_user() and doctype == "Employee":
+        if not _is_safe_kiosk_employee_bootstrap_request(
+            _form_dict(), "frappe.client.get_value"
+        ):
+            _throw_permission(
+                _("Kiosk accounts cannot access Employee or User records.")
+            )
+        return None
+
+    from frappe.client import get_value
+
+    return get_value(
+        doctype=doctype,
+        fieldname=fieldname,
+        filters=filters,
+        as_dict=as_dict,
+        debug=debug,
+        parent=parent,
+    )
+
+
 def before_request():
     """Close standard REST/RPC/report/export bypasses for kiosk sessions."""
 
@@ -628,13 +696,16 @@ def before_request():
     command = _request_command(form, path)
     requested_doctypes = _requested_doctypes(form, path)
     allowed_employee_search = _is_kiosk_employee_search_request(form, command)
+    safe_employee_bootstrap = _is_safe_kiosk_employee_bootstrap_request(
+        form, command
+    )
     safe_timesheet_summary = _is_safe_timesheet_summary_request(form, command)
     protected_doctypes = requested_doctypes.intersection(PROTECTED_DOCTYPES)
 
     if (
         protected_doctypes
         and (
-            not allowed_employee_search
+            not (allowed_employee_search or safe_employee_bootstrap)
             or protected_doctypes != {"Employee"}
         )
     ):
@@ -643,6 +714,9 @@ def before_request():
         )
 
     if allowed_employee_search:
+        return
+
+    if safe_employee_bootstrap:
         return
 
     if safe_timesheet_summary:

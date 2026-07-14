@@ -285,6 +285,13 @@ class KioskPermissionTests(unittest.TestCase):
             "limit_page_length": "0",
         }
 
+    def _safe_employee_bootstrap_form(self):
+        return {
+            "doctype": "Employee",
+            "fieldname": json.dumps(["name", "company"]),
+            "filters": json.dumps({"user_id": "kiosk@example.com"}),
+        }
+
     def test_kiosk_classification_remains_fail_closed(self):
         self.assertTrue(self.boot.is_kiosk_user("kiosk@example.com"))
         self.assertTrue(self.boot.is_kiosk_user("mixed@example.com"))
@@ -418,6 +425,44 @@ class KioskPermissionTests(unittest.TestCase):
                 self.frappe.local.form_dict.update(override)
                 with self.assertRaises(FakePermissionError):
                     self.permissions.before_request()
+
+    def test_stock_timesheet_employee_bootstrap_returns_no_record(self):
+        self.frappe.local.request = types.SimpleNamespace(
+            path="/api/method/frappe.client.get_value",
+            method="GET",
+        )
+        self.frappe.local.form_dict = self._safe_employee_bootstrap_form()
+
+        self.permissions.before_request()
+        self.assertIsNone(
+            self.permissions.guarded_client_get_value(
+                "Employee",
+                fieldname='["name", "company"]',
+                filters='{"user_id": "kiosk@example.com"}',
+            )
+        )
+        self.assertIsNone(self.frappe.last_get_all)
+
+        unsafe_overrides = (
+            {"fieldname": json.dumps(["name", "company", "employee_name"])},
+            {"filters": json.dumps({"user_id": "other@example.com"})},
+            {"parent": "Timesheet"},
+            {"as_dict": "0"},
+        )
+        for override in unsafe_overrides:
+            with self.subTest(override=override):
+                self.frappe.local.form_dict = self._safe_employee_bootstrap_form()
+                self.frappe.local.form_dict.update(override)
+                with self.assertRaises(FakePermissionError):
+                    self.permissions.before_request()
+
+        self.frappe.local.request = types.SimpleNamespace(
+            path="/api/method/frappe.client.get_value",
+            method="POST",
+        )
+        self.frappe.local.form_dict = self._safe_employee_bootstrap_form()
+        with self.assertRaises(FakePermissionError):
+            self.permissions.before_request()
 
     def test_direct_custom_search_http_call_is_denied(self):
         self.frappe.local.request = types.SimpleNamespace(
