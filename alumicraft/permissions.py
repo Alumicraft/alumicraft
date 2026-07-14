@@ -23,7 +23,6 @@ RELEVANT_DOCTYPES = PROTECTED_DOCTYPES | frozenset((TIMESHEET_DOCTYPE,))
 KIOSK_EMPLOYEE_FIELDS = ("name", "company", "employee_name", "department")
 KIOSK_EMPLOYEE_SEARCH_QUERY = "alumicraft.permissions.search_kiosk_employees"
 KIOSK_EMPLOYEE_SENTINEL = "\u2063"
-KIOSK_EMPLOYEE_BOOTSTRAP_FIELDS = ("name", "company")
 
 ALLOWED_TIMESHEET_PERMISSION_TYPES = frozenset(("create", "write", "submit"))
 
@@ -507,38 +506,19 @@ def _is_kiosk_employee_search_request(form, command):
     )
 
 
-def _is_safe_kiosk_employee_bootstrap_request(form, command):
-    """Recognize ERPNext's automatic Employee lookup for the current login.
+def _is_empty_kiosk_employee_value_request(form, command):
+    """Recognize Employee value lookups that are answered with no record.
 
-    A shared terminal is deliberately not linked to one Employee. Returning an
-    empty result for this exact request prevents ERPNext's stock Timesheet
-    onload handler from raising a permission modal without revealing any
-    Employee data.
+    ERPNext automatically performs one while opening a new Timesheet, but
+    impersonated sessions and framework releases do not always serialize it
+    identically. Every kiosk Employee ``get_value`` request is therefore
+    answered with no record, without querying or revealing Employee data.
     """
 
-    if (
-        command != "frappe.client.get_value"
-        or _request_method() != "GET"
-        or form.get("doctype") != "Employee"
-    ):
-        return False
-
-    allowed_keys = {
-        "cmd",
-        "doctype",
-        "fieldname",
-        "filters",
-        "parent",
-    }
-    if set(form).difference(allowed_keys):
-        return False
-
-    fieldname = _parse_json_if_possible(form.get("fieldname"))
-    filters = _parse_json_if_possible(form.get("filters"))
     return bool(
-        fieldname == list(KIOSK_EMPLOYEE_BOOTSTRAP_FIELDS)
-        and filters == {"user_id": frappe.session.user}
-        and form.get("parent") in (None, "")
+        command == "frappe.client.get_value"
+        and _request_method() in ("GET", "POST")
+        and form.get("doctype") == "Employee"
     )
 
 
@@ -665,7 +645,7 @@ def guarded_client_get_value(
     """Return no Employee for ERPNext's shared-terminal startup lookup."""
 
     if is_kiosk_user() and doctype == "Employee":
-        if not _is_safe_kiosk_employee_bootstrap_request(
+        if not _is_empty_kiosk_employee_value_request(
             _form_dict(), "frappe.client.get_value"
         ):
             _throw_permission(
@@ -696,7 +676,7 @@ def before_request():
     command = _request_command(form, path)
     requested_doctypes = _requested_doctypes(form, path)
     allowed_employee_search = _is_kiosk_employee_search_request(form, command)
-    safe_employee_bootstrap = _is_safe_kiosk_employee_bootstrap_request(
+    empty_employee_value = _is_empty_kiosk_employee_value_request(
         form, command
     )
     safe_timesheet_summary = _is_safe_timesheet_summary_request(form, command)
@@ -705,7 +685,7 @@ def before_request():
     if (
         protected_doctypes
         and (
-            not (allowed_employee_search or safe_employee_bootstrap)
+            not (allowed_employee_search or empty_employee_value)
             or protected_doctypes != {"Employee"}
         )
     ):
@@ -716,7 +696,7 @@ def before_request():
     if allowed_employee_search:
         return
 
-    if safe_employee_bootstrap:
+    if empty_employee_value:
         return
 
     if safe_timesheet_summary:
