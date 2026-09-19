@@ -1,0 +1,3 @@
+# Vite bundles include upstream CSS template literals with intentional whitespace.
+alumicraft/public/vehicle_bom/portal.js -whitespace linguist-generated=true
+alumicraft/public/vehicle_bom/portal.css linguist-generated=true

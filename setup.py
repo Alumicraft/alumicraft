@@ -5,7 +5,7 @@ with open("requirements.txt") as f:
 
 setup(
     name="alumicraft",
-    version="0.0.1",
+    version="0.1.0",
     description="Alumicraft custom Frappe app",
     author="Alumicraft",
     author_email="dev@alumicraft.local",
