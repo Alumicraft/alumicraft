@@ -1,0 +1,304 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "BOM-STUDY-.#####",
+ "creation": "2026-09-18 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "study_section",
+  "title",
+  "company",
+  "currency",
+  "standard_description",
+  "mode",
+  "scope_section",
+  "projects",
+  "from_date",
+  "to_date",
+  "status",
+  "requested_by",
+  "snapshot_json",
+  "decisions_json",
+  "metrics_section",
+  "metrics_json",
+  "warnings",
+  "error_message",
+  "review_section",
+  "materials",
+  "labor",
+  "estimate_section",
+  "material_allowance",
+  "overhead_allowance",
+  "target_margin",
+  "material_total",
+  "labor_total",
+  "estimated_total",
+  "suggested_retail",
+  "missing_cost_count",
+  "pending_review_count"
+ ],
+ "fields": [
+  {
+   "fieldname": "study_section",
+   "fieldtype": "Section Break",
+   "label": "Study"
+  },
+  {
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Title",
+   "reqd": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Company",
+   "options": "Company",
+   "reqd": 1
+  },
+  {
+   "fieldname": "currency",
+   "fieldtype": "Link",
+   "label": "Currency",
+   "no_copy": 1,
+   "options": "Currency",
+   "read_only": 1
+  },
+  {
+   "description": "A standard vehicle configuration used to scope the historical evidence review.",
+   "fieldname": "standard_description",
+   "fieldtype": "Small Text",
+   "label": "Standard Description",
+   "reqd": 1
+  },
+  {
+   "default": "Historical only",
+   "fieldname": "mode",
+   "fieldtype": "Select",
+   "label": "Mode",
+   "options": "Historical only\nJev"
+  },
+  {
+   "fieldname": "scope_section",
+   "fieldtype": "Section Break",
+   "label": "Historical Scope"
+  },
+  {
+   "description": "Submitted project evidence is collected for each selected project. Vehicle counts are used for per-vehicle comparisons; historical purchases never prove installed quantity.",
+   "fieldname": "projects",
+   "fieldtype": "Table",
+   "label": "Projects",
+   "no_copy": 0,
+   "options": "Vehicle BOM Project",
+   "reqd": 1
+  },
+  {
+   "fieldname": "from_date",
+   "fieldtype": "Date",
+   "label": "From Date"
+  },
+  {
+   "fieldname": "to_date",
+   "fieldtype": "Date",
+   "label": "To Date"
+  },
+  {
+   "default": "Draft",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "no_copy": 1,
+   "options": "Draft\nQueued\nRunning\nNeeds Review\nFailed",
+   "read_only": 1
+  },
+  {
+   "fieldname": "requested_by",
+   "fieldtype": "Link",
+   "hidden": 1,
+   "label": "Requested By",
+   "no_copy": 1,
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "snapshot_json",
+   "fieldtype": "Long Text",
+   "hidden": 1,
+   "label": "Snapshot JSON",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "decisions_json",
+   "fieldtype": "Long Text",
+   "hidden": 1,
+   "label": "Decisions JSON",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "metrics_section",
+   "fieldtype": "Section Break",
+   "label": "Run Metrics"
+  },
+  {
+   "fieldname": "metrics_json",
+   "fieldtype": "Long Text",
+   "label": "Metrics JSON",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "warnings",
+   "fieldtype": "Long Text",
+   "label": "Warnings",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "error_message",
+   "fieldtype": "Small Text",
+   "label": "Error Message",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "review_section",
+   "fieldtype": "Section Break",
+   "label": "Review Evidence"
+  },
+  {
+   "fieldname": "materials",
+   "fieldtype": "Table",
+   "label": "Materials",
+   "no_copy": 1,
+   "options": "Vehicle BOM Material"
+  },
+  {
+   "fieldname": "labor",
+   "fieldtype": "Table",
+   "label": "Labor",
+   "no_copy": 1,
+   "options": "Vehicle BOM Labor"
+  },
+  {
+   "fieldname": "estimate_section",
+   "fieldtype": "Section Break",
+   "label": "Estimate"
+  },
+  {
+   "default": "0",
+   "fieldname": "material_allowance",
+   "fieldtype": "Currency",
+   "label": "Material Allowance",
+   "options": "currency"
+  },
+  {
+   "default": "0",
+   "fieldname": "overhead_allowance",
+   "fieldtype": "Currency",
+   "label": "Overhead Allowance",
+   "options": "currency"
+  },
+  {
+   "default": "0",
+   "fieldname": "target_margin",
+   "fieldtype": "Percent",
+   "label": "Target Margin"
+  },
+  {
+   "fieldname": "material_total",
+   "fieldtype": "Currency",
+   "label": "Material Total",
+   "no_copy": 1,
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "labor_total",
+   "fieldtype": "Currency",
+   "label": "Labor Total",
+   "no_copy": 1,
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "estimated_total",
+   "fieldtype": "Currency",
+   "label": "Estimated Total",
+   "no_copy": 1,
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "description": "Calculated only when there is active material evidence and active labor evidence, every active material and labor line is reviewed, and every active line has Cost Known checked. Zero means unavailable, not free.",
+   "fieldname": "suggested_retail",
+   "fieldtype": "Currency",
+   "label": "Suggested Retail",
+   "no_copy": 1,
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "missing_cost_count",
+   "fieldtype": "Int",
+   "label": "Missing Cost Count",
+   "no_copy": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "pending_review_count",
+   "fieldtype": "Int",
+   "label": "Pending Review Count",
+   "no_copy": 1,
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-09-18 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Alumicraft",
+ "name": "Vehicle BOM Study",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "permlevel": 0,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "if_owner": 1,
+   "permlevel": 0,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Manufacturing Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

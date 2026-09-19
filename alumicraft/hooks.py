@@ -4,6 +4,7 @@ app_publisher = "Alumicraft"
 app_description = "Alumicraft custom Frappe app"
 app_email = "dev@alumicraft.local"
 app_license = "MIT"
+required_apps = ["erpnext"]
 
 ALUMICRAFT_ASSET_VERSION = "20260710-4"
 
