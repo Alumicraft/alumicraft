@@ -1,0 +1,121 @@
+{
+ "actions": [],
+ "creation": "2026-09-18 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "provider_section",
+  "enabled",
+  "api_key",
+  "model",
+  "batch_size",
+  "concurrency",
+  "max_requests",
+  "timeout",
+  "confidence_threshold",
+  "data_handling_note"
+ ],
+ "fields": [
+  {
+   "fieldname": "provider_section",
+   "fieldtype": "Section Break",
+   "label": "Jev Provider Settings"
+  },
+  {
+   "default": "0",
+   "description": "Enable the optional Jev classification pass. Historical-only studies do not need an API key or provider call.",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Enable Jev"
+  },
+  {
+   "description": "Stored as a password. When a user runs Jev, selected purchase descriptions and the standard configuration are sent to TypeSafe. This key is never fetched by the browser.",
+   "fieldname": "api_key",
+   "fieldtype": "Password",
+   "label": "TypeSafe API Key",
+   "permlevel": 1
+  },
+  {
+   "default": "jev-latest",
+   "description": "TypeSafe model identifier used for Jev classifications.",
+   "fieldname": "model",
+   "fieldtype": "Data",
+   "label": "Model"
+  },
+  {
+   "default": "20",
+   "description": "Maximum number of independent classification rows sent in one request.",
+   "fieldname": "batch_size",
+   "fieldtype": "Int",
+   "label": "Batch Size"
+  },
+  {
+   "default": "4",
+   "description": "Maximum number of requests processed concurrently.",
+   "fieldname": "concurrency",
+   "fieldtype": "Int",
+   "label": "Concurrency"
+  },
+  {
+   "default": "500",
+   "description": "Maximum provider requests allowed for one study job.",
+   "fieldname": "max_requests",
+   "fieldtype": "Int",
+   "label": "Max Requests"
+  },
+  {
+   "default": "30",
+   "description": "Provider request timeout in seconds.",
+   "fieldname": "timeout",
+   "fieldtype": "Int",
+   "label": "Timeout (seconds)"
+  },
+  {
+   "default": "0.9",
+   "description": "Confidence threshold used to flag Jev suggestions for review. This does not claim BOM accuracy or completeness.",
+   "fieldname": "confidence_threshold",
+   "fieldtype": "Float",
+   "label": "Confidence Threshold"
+  },
+  {
+   "fieldname": "data_handling_note",
+   "fieldtype": "HTML",
+   "options": "<p>When Jev is enabled, chosen purchase descriptions and the standard configuration are sent to TypeSafe when a user runs a study. Historical-only studies use the local snapshot and require no API.</p>",
+   "label": "Data Handling"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-09-18 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Alumicraft",
+ "name": "Vehicle BOM Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "permlevel": 0,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "permlevel": 1,
+   "read": 1,
+   "role": "System Manager",
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
