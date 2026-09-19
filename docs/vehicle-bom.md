@@ -24,7 +24,19 @@ bench restart
 
 Do not replace an existing app checkout with an unreviewed branch. Take the usual site backup before deployment. Neither installation nor migration runs the pipeline, sends data to a model provider, or changes existing BOMs or prices.
 
-## First use
+## Standalone workspace and access
+
+After updating the Alumicraft app, open `https://backdesk.drivealumicraft.com/vehicle-bom` directly. This dedicated page runs outside Desk and adds no ERPNext search-bar, navigation or workspace shortcut. The existing native DocTypes remain available to authorized administrators.
+
+The workspace uses the existing ERPNext login session. Guests are redirected to the site's login page with a return URL. Only signed-in System Managers or Manufacturing Managers can open it or call its data endpoints. Study ownership and source-document permissions continue to apply. Self-registration, if enabled elsewhere on the site, does not grant the required roles. This feature does not create users or change role assignments.
+
+The page is uncached, excluded from the sitemap, and marked noindex. Those settings are for privacy and discovery; server-side role and document checks provide access control. Mutations use same-origin session cookies and Frappe CSRF protection. No service API key is exposed in the browser. A stale modified timestamp prevents one browser from overwriting another user's saved review.
+
+Use the dedicated page to create a study, select representative projects, build the draft, review components/labor, save cost changes, and export CSV. The page is hosted by the existing app; it needs no separate hosting service or identity database. The interface uses React and real shadcn/ui components (Radix primitives) installed from the official shadcn registry. Styles belong only to this standalone page; Desk styles and navigation are unchanged.
+
+Frontend source lives in `frontend/`. To change it, run `npm ci`, `npm test`, and `npm run build` from that directory. Vite writes the compiled assets to `alumicraft/public/vehicle_bom/`; include those assets in the app revision. Frappe Cloud can serve the committed assets through the normal app build/update without needing a separate Node server. Python source packages also include the frontend source and lockfile.
+
+## First use in the native form
 
 1. Search Desk for **Vehicle BOM Study** (`/app/vehicle-bom-study`) and create a record.
 2. Select the company and describe the standard vehicle configuration. Add representative projects. Enter the number of completed vehicles represented by each project; default one.
@@ -61,12 +73,15 @@ This produces an estimating BOM for a standard vehicle, not a released manufactu
 
 ## Verification
 
-Offline checks cover accounting/quantity edge cases, permission-aware extraction, Jev payload/response handling and retry limits, saved-state protection, CSV escaping, and native form/package structure. Tests use synthetic data and mocked HTTP; they do not call TypeSafe.
+Offline checks cover accounting/quantity edge cases, permission-aware extraction, Jev payload/response handling and retry limits, saved-state protection, CSV escaping, native form/package structure, standalone page authentication, portal payload limits, and React save/navigation behavior. Tests use synthetic data and mocked HTTP; they do not call TypeSafe.
 
 ```sh
 python -m pytest -q tests
 node --test tests/js/*.test.js
 python -m compileall -q alumicraft
+(cd frontend && npm ci && npm test && npm run build)
 ```
+
+The standalone page has also been checked in a browser against a synthetic Class 10 fixture, including editing quantities, the unsaved-change dialog, saved cost refresh, and escaped source descriptions. This fixture does not exercise a live Frappe session or production project data.
 
 Before deployment is accepted, verify on a disposable Frappe site: app install/migrate; Settings password persistence; native Study create/save; queue processing; a synthetic two-project fixture with a return and foreign-currency labor; material review/save/export; worker recovery; manager/owner/company permission boundaries; duplicate-study reset. Then run a small labeled real-data Jev sample and compare accuracy, review time, throughput and cost against a low-cost LLM before processing all history. Offline tests do not prove site installation, live provider behavior, or BOM coverage.

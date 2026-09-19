@@ -6,6 +6,9 @@ include *.py
 include *.txt
 recursive-include docs *.md
 recursive-include tests *.py *.js
+include frontend/package.json frontend/package-lock.json frontend/components.json
+include frontend/index.html frontend/tsconfig*.json frontend/vite.config.*
+recursive-include frontend/src *.ts *.tsx *.css
 recursive-include alumicraft *.css
 recursive-include alumicraft *.csv
 recursive-include alumicraft *.html
