@@ -89,10 +89,16 @@ class BomDataTests(unittest.TestCase):
         self.frappe.calls.clear()
         self.frappe.rows["Company"] = [{"name": "Alumicraft", "default_currency": "USD"}]
         self.frappe.rows["Project"] = [
-            {"name": "P-ONE", "company": "Alumicraft", "description": "First"},
-            {"name": "P-TWO", "company": "Alumicraft", "description": "Second"},
-            {"name": "OTHER", "company": "Other Co", "description": "Hidden"},
+            {"name": "P-ONE", "company": "Alumicraft", "description": "First", "project_type": "Build"},
+            {"name": "P-TWO", "company": "Alumicraft", "description": "Second", "project_type": "Build"},
+            {"name": "OTHER", "company": "Other Co", "description": "Hidden", "project_type": "Build"},
         ]
+
+    def test_service_project_is_rejected_before_reading_transactions(self):
+        self.frappe.rows["Project"][0]["project_type"] = "Service/Parts"
+        with self.assertRaisesRegex(FakePermissionError, "require Build projects"):
+            self.data.collect_snapshot("Alumicraft", ["P-ONE"])
+        self.assertFalse(any(doctype == "Purchase Invoice" for _, doctype, _ in self.frappe.calls))
 
     def test_company_and_project_scope_is_authorized_before_children(self):
         self.frappe.rows["Purchase Invoice"] = [

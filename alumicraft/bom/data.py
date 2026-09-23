@@ -64,7 +64,7 @@ def collect_snapshot(
     project_rows = _paged_get_list(
         "Project",
         {"name": ["in", project_names], "company": company},
-        ["name", "company", "project_name", "description"],
+        ["name", "company", "project_name", "description", "project_type"],
         order_by="name asc",
     )
     authorized_projects = {
@@ -78,6 +78,14 @@ def collect_snapshot(
             "Project is not readable, does not exist, or belongs to another company: "
             + ", ".join(missing_projects)
         )
+
+    non_build_projects = [
+        _text(_row_value(row, "name"))
+        for row in project_rows
+        if _text(_row_value(row, "project_type")) != "Build"
+    ]
+    if non_build_projects:
+        _raise_permission("Vehicle BOM studies require Build projects: " + ", ".join(non_build_projects))
 
     purchase_parents = _get_purchase_parents(company, from_date, to_date)
     purchase_parent_names = [

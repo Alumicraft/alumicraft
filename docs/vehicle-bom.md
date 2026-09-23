@@ -39,7 +39,7 @@ Frontend source lives in `frontend/`. To change it, run `npm ci`, `npm test`, an
 ## First use in the native form
 
 1. Search Desk for **Vehicle BOM Study** (`/app/vehicle-bom-study`) and create a record.
-2. Select the company and describe the standard vehicle configuration. Add representative projects. Enter the number of completed vehicles represented by each project; default one.
+2. Select the company and describe the standard vehicle configuration. Add representative projects whose ERPNext **Project Type** is **Build**; service and parts projects are excluded. Enter the number of completed vehicles represented by each project; default one.
 3. Leave dates blank for full project history where possible. A date window can omit earlier purchases or returns. Do not mix incomplete builds with complete ones without reviewing that limitation.
 4. Choose **Historical only** to test the data extraction without an API key. Save and click **Build Draft**.
 5. The background job snapshots submitted, readable source documents. Review the materials and labor tables after the status changes to **Needs Review**.

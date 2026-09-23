@@ -77,6 +77,7 @@ class PortalTests(unittest.TestCase):
         self.study = Study()
         self.company_rows = [Row(name="Alumicraft", default_currency="USD")]
         self.project_rows = [Row(name="PROJECT-1", project_name="Project one", status="Open")]
+        self.get_list_calls = []
         self.frappe.get_list = self.get_list
         self.frappe.get_doc = self.get_doc
         self.snapshot_checks = []
@@ -108,6 +109,7 @@ class PortalTests(unittest.TestCase):
         return self.study
 
     def get_list(self, doctype, **kwargs):
+        self.get_list_calls.append((doctype, kwargs))
         if doctype == "Company":
             return self.company_rows
         if doctype == "Project":
@@ -130,6 +132,8 @@ class PortalTests(unittest.TestCase):
     def test_permission_filtered_reference_and_study_lists(self):
         self.assertEqual(self.portal.bootstrap()["companies"], [{"name": "Alumicraft", "currency": "USD"}])
         self.assertEqual(self.portal.search_projects("Alumicraft"), [{"name": "PROJECT-1", "project_name": "Project one", "status": "Open"}])
+        project_call = next(kwargs for doctype, kwargs in self.get_list_calls if doctype == "Project")
+        self.assertEqual(project_call["filters"]["project_type"], "Build")
         self.assertEqual(self.portal.list_studies()[0]["name"], self.study.name)
 
     def test_study_response_excludes_snapshot_decisions_and_requester(self):
