@@ -19,6 +19,7 @@ class PermissionDocument:
 
 class ProjectDocument(PermissionDocument):
 	company = "Alumicraft"
+	project_type = "Build"
 
 
 class FakeDB:
@@ -233,6 +234,15 @@ class VehicleBOMControllerTests(unittest.TestCase):
 		self.assertEqual(current.target_margin, 15)
 		self.assertEqual(current.material_total, 20)
 		self.assertEqual(current.labor_total, 75)
+
+	def test_service_project_cannot_be_saved(self):
+		original_type = ProjectDocument.project_type
+		try:
+			ProjectDocument.project_type = "Service/Parts"
+			previous = self.study(status="Draft", snapshot_json="")
+			self.assert_rejected(self.study(previous=previous, status="Draft", snapshot_json=""), "require Build projects")
+		finally:
+			ProjectDocument.project_type = original_type
 
 	def test_generated_evidence_cannot_be_deleted(self):
 		previous, current = self.reviewed_pair()

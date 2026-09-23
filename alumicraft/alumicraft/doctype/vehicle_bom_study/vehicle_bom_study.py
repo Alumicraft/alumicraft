@@ -49,6 +49,8 @@ class VehicleBOMStudy(Document):
                 project.check_permission("read")
                 if project.company and project.company != self.company:
                     frappe.throw("Every selected project must belong to the study company.")
+                if project.project_type != "Build":
+                    frappe.throw("Vehicle BOM studies require Build projects.")
         # Historic amounts retain the currency in which they were captured.
         self.currency = (
             json.loads(self.snapshot_json)["currency"] if self.snapshot_json

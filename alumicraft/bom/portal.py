@@ -283,7 +283,7 @@ def search_projects(company: str, query: str = "") -> list[dict[str, Any]]:
     query = _text(query, "query", max_length=MAX_QUERY_LENGTH)
     if not _company_is_readable(company):
         frappe.throw("Company is not readable or does not exist.", frappe.PermissionError)
-    filters: dict[str, Any] = {"company": company}
+    filters: dict[str, Any] = {"company": company, "project_type": "Build"}
     kwargs: dict[str, Any] = {
         "filters": filters,
         "fields": ["name", "project_name", "status"],
