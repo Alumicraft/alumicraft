@@ -44,7 +44,8 @@ describe('standalone review workflow',()=>{
   await user.click(screen.getByRole('button',{name:'Save changes'}));
   await waitFor(()=>expect(api.saveStudy).toHaveBeenCalledOnce());
   const sent=vi.mocked(api.saveStudy).mock.calls[0][0];
-  expect(sent.projects).toEqual([{project:'P1',vehicle_count:1}]);
+  expect(sent.projects).toBeUndefined();
+  expect(sent.standard_description).toBeUndefined();
   expect(sent.modified).toBe('v1');
   expect(sent.materials[0]).toMatchObject({name:'M1',proposed_quantity:4,stock_uom:'Nos'});
   expect(sent.materials[0]).not.toHaveProperty('evidence');

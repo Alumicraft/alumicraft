@@ -33,8 +33,8 @@ export interface BootstrapResponse { user: string; companies: Company[]; assembl
 export type ApiEnvelope<T> = { message: T }
 
 export interface SavePayload {
-  name?: string; modified?: string | null; title: string; company: string; standard_description: string
-  mode: string; from_date: string; to_date: string; projects: Array<{ project: string; vehicle_count: number }>
+  name?: string; modified?: string | null; title: string; company?: string; standard_description?: string
+  mode?: string; from_date?: string; to_date?: string; projects?: Array<{ project: string; vehicle_count: number }>
   materials: Array<Record<string, unknown>>; labor: Array<Record<string, unknown>>
   material_allowance: number; overhead_allowance: number; target_margin: number
 }
