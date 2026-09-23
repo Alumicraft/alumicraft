@@ -83,12 +83,16 @@ export function toSavePayload(study: Study): SavePayload {
   const materialFields = ["name", "assembly", "item_code", "description", "stock_uom", "proposed_quantity", "unit_cost", "cost_known", "purpose", "review_status", "notes"]
   const laborFields = ["name", "activity_type", "proposed_hours", "hourly_cost", "cost_known", "review_status", "notes"]
   const pick = (row: Record<string, unknown>, fields: string[]) => Object.fromEntries(fields.filter((field) => row[field] !== undefined && row[field] !== null).map((field) => [field, row[field]]))
-  return {
-    ...(study.name ? { name: study.name, modified: study.modified } : {}), title: study.title.trim(), company: study.company,
-    standard_description: study.standard_description.trim(), mode: study.mode, from_date: study.from_date || "", to_date: study.to_date || "",
-    projects: study.projects.map((row) => ({ project: row.project, vehicle_count: Number(row.vehicle_count) })),
+  const review = {
+    ...(study.name ? { name: study.name, modified: study.modified } : {}), title: study.title.trim(),
     materials: study.materials.map((row) => pick(row as unknown as Record<string, unknown>, materialFields)),
     labor: study.labor.map((row) => pick(row as unknown as Record<string, unknown>, laborFields)), material_allowance: Number(study.material_allowance) || 0,
     overhead_allowance: Number(study.overhead_allowance) || 0, target_margin: Number(study.target_margin) || 0,
+  }
+  if (study.status !== "Draft") return review
+  return {
+    ...review, company: study.company, standard_description: study.standard_description.trim(), mode: study.mode,
+    from_date: study.from_date || "", to_date: study.to_date || "",
+    projects: study.projects.map((row) => ({ project: row.project, vehicle_count: Number(row.vehicle_count) })),
   }
 }

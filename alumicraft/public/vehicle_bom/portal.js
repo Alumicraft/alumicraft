@@ -9535,13 +9535,20 @@ function Be(e) {
 		"cost_known",
 		"review_status",
 		"notes"
-	], r = (e, t) => Object.fromEntries(t.filter((t) => e[t] !== void 0 && e[t] !== null).map((t) => [t, e[t]]));
-	return {
+	], r = (e, t) => Object.fromEntries(t.filter((t) => e[t] !== void 0 && e[t] !== null).map((t) => [t, e[t]])), i = {
 		...e.name ? {
 			name: e.name,
 			modified: e.modified
 		} : {},
 		title: e.title.trim(),
+		materials: e.materials.map((e) => r(e, t)),
+		labor: e.labor.map((e) => r(e, n)),
+		material_allowance: Number(e.material_allowance) || 0,
+		overhead_allowance: Number(e.overhead_allowance) || 0,
+		target_margin: Number(e.target_margin) || 0
+	};
+	return e.status === "Draft" ? {
+		...i,
 		company: e.company,
 		standard_description: e.standard_description.trim(),
 		mode: e.mode,
@@ -9550,13 +9557,8 @@ function Be(e) {
 		projects: e.projects.map((e) => ({
 			project: e.project,
 			vehicle_count: Number(e.vehicle_count)
-		})),
-		materials: e.materials.map((e) => r(e, t)),
-		labor: e.labor.map((e) => r(e, n)),
-		material_allowance: Number(e.material_allowance) || 0,
-		overhead_allowance: Number(e.overhead_allowance) || 0,
-		target_margin: Number(e.target_margin) || 0
-	};
+		}))
+	} : i;
 }
 //#endregion
 //#region node_modules/clsx/dist/clsx.mjs
