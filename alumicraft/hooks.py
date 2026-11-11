@@ -55,6 +55,10 @@ has_permission = {
 }
 
 doc_events = {
+    "Bank Transaction": {
+        "validate": "alumicraft.banking.validate_bank_transaction_id",
+        "before_update_after_submit": "alumicraft.banking.validate_bank_transaction_id",
+    },
     "Timesheet": {
         "before_validate": "alumicraft.permissions.validate_kiosk_timesheet",
         "before_cancel": "alumicraft.permissions.deny_kiosk_timesheet_mutation",
